@@ -98,7 +98,6 @@ try {
     $gameScheduler = new GameScheduler($fields);
     $orderedFields = $gameScheduler->getBestDistribution();
 } catch (\Throwable $th) {
-    trigger_error($th->getMessage());
     http_response_code(400);
     echo json_encode([
         'message' => 'Kunne ikke generere puljer eller skema for banerne.. Prøv igen. Evt prøv at ændre på nogle af parametrene.'
