@@ -1,0 +1,15 @@
+{
+    "name": "bunds/tournament",
+    "autoload": {
+        "psr-4": {
+            "Bunds\\Tournament\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Rasmus Bundsgaard Sørensen",
+            "email": "rso@ordbogen.com"
+        }
+    ],
+    "require": {}
+}

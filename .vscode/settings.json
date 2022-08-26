@@ -1,0 +1,5 @@
+{
+    "intelephense.environment.phpVersion": "8.1.0",
+    "phpcs.warningSeverity": 6,
+    "phpcs.enable": false
+}

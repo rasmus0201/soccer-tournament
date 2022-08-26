@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Turnering</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    </head>
+
+    <body>
+        <script src="https://unpkg.com/vue@3"></script>
+        <script src="./main.js" type="application/javascript"></script>
+
+        <div id="app" class="container">
+            <form @submit.prevent="generate()">
+                <fieldset>
+                    <label>
+                        <span>Tid pr. kamp</span>
+                        <input type="number" v-model="matchTime" :disabled="state == STATES.Requesting">
+                    </label>
+                    <label>
+                        <span>Starttid</span>
+                        <input type="time" v-model="startTime" :disabled="state == STATES.Requesting">
+                    </label>
+                    <label>
+                        <span>Sluttid</span>
+                        <input type="time" v-model="endTime" :disabled="state == STATES.Requesting">
+                    </label>
+                </fieldset>
+                <fieldset>
+                    <label>
+                        <span>Antal baner (Er der 1-5 hold, vil det blive tvunget 1 bane)</span>
+                        <input type="number" min="1" max="10" v-model="numberFields" :disabled="state == STATES.Requesting">
+                    </label>
+                </fieldset>
+
+                <div class="row">
+                    <div class=" col-6">
+                        <label for="teams">Teams:
+                            <textarea v-model="teams" :disabled="state == STATES.Requesting" rows="10" cols="30" placeholder="Et team pr linje (sæt komma for at indikere klubben)" class="form-control" id="teams"></textarea>
+                        </label>
+                    </div>
+                    <div class="col-6">
+                        <button type="submit" class="btn btn-primary" :disabled="state == STATES.Requesting">Lav tilfældige puljer/matches</button>
+                    </div>
+                </div>
+            </form>
+            <div v-if="state == STATES.Requesting">
+                <h1>Arbejder på det... (det kan tage op til 30 sek)</h1>
+            </div>
+            <div v-if="state == STATES.Error">
+                <hr />
+                <h1>Der opstod en fejl</h1>
+                <p style="white-space:pre-wrap;">{{ result }}</p>
+            </div>
+            <div v-if="state == STATES.Success">
+                <hr />
+
+                <h1>Puljer ({{ result.groups.length }})</h1>
+
+                <div class="row">
+                    <div v-for="group in result.groups" :key="group.index"  class="col-md-4 my-3 d-flex align-items-stretch">
+                        <div class="card w-100">
+                            <div class="card-header" :style="{ backgroundColor: group.color }">
+                                Pulje #{{ group.index + 1 }}
+                            </div>
+                            <div class="card-body">
+                                <p>Hold: {{ group.teams.map((t) => t.name).join(", ") }}</p>
+                                <ul>
+                                    <li v-for="(game, matchIndex) in group.games" :key="matchIndex">
+                                        <span class="badge bg-secondary">{{ game.teams[0] }}</span>
+                                        <span class="mx-2">—</span>
+                                        <span class="badge bg-secondary">{{ game.teams[1] }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr />
+
+                <h1>Skema for alle baner ({{ result.fields.length }}) og kampe ({{ totalGames }})</h1>
+
+                <div class="row">
+                    <div v-for="(games, index) in result.fields" :key="index" class="col-md-6 my-3 d-flex align-items-stretch">
+                        <div class="card w-100">
+                            <div class="card-header">
+                                Bane #{{ index + 1 }}
+                            </div>
+                            <div class="card-body">
+                                <p>Puljer: {{ groupsByField[index].map((g) => `#${g + 1}`).join(", ") }}</p>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-striped rounded rounded-3 overflow-hidden">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <td>Starttid</td>
+                                                <td class="text-end">Hold #1</td>
+                                                <td>Hold #2</td>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(game, mIndex) in games" :key="mIndex">
+                                                <td>
+                                                    <strong>{{ game.start.time }}</strong>
+                                                </td>
+                                                <td class="text-end">
+                                                    <span class="badge" :style="{ backgroundColor: result.groups[game.group].color }">{{ game.teams[0] }}</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge" :style="{ backgroundColor: result.groups[game.group].color }">{{ game.teams[1] }}</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
