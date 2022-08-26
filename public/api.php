@@ -1,5 +1,18 @@
 <?php
 
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Bunds\Tournament\{
+    Builders\FieldsBuilder,
+    Builders\GamesBuilder,
+    Builders\GroupsBuilder,
+    Collections\GameCollection,
+    Collections\TeamCollection,
+    Entities\Team,
+    GameScheduler,
+    GroupDistributor
+};
+
 function sanitize_array(array $array): array
 {
     return array_values(
@@ -9,76 +22,98 @@ function sanitize_array(array $array): array
     );
 }
 
-function dd()
-{
-    echo '<pre>';
-    var_dump(...func_get_args());
-    die;
-}
+$colors = [
+    '#ff7979',
+    '#ffbe76',
+    '#22a6b3',
+    '#badc58',
+    '#686de0',
+    '#130f40',
+    '#e056fd',
+    '#30336b',
+    '#f9ca24',
+];
+
+$matchTime = intval($_POST['matchTime']);
+$startTime = "{$_POST['startTime']}:00";
+$endTime = "{$_POST['endTime']}:00";
 
 $teams = sanitize_array(explode("\n", $_POST['teams']));
-shuffle($teams);
+$numberOfFields = max(1, min((int) $_POST['numberFields'], 10));
+$matchDuration = new DateInterval("PT{$matchTime}M");
+$start = new DateTime("now {$startTime}");
+$end = new DateTime("now {$endTime}");
+$gameTimes = iterator_to_array(new DatePeriod($start, $matchDuration, $end));
+$fieldCapacity = count($gameTimes);
 
-$groups = array_fill(0, floor(count($teams) / 4), [
-    'teams' => [],
-    'matches' => [],
-]);
+$groupsBuilder = new GroupsBuilder();
 
-$index = 0;
-foreach ($teams as $team) {
-    $groups[$index]['teams'][] = $team;
+$teams = array_map(function (string $team) {
+    $parts = explode(',', $team);
 
-    $index = ($index + 1) % count($groups);
+    return new Team($parts[0], $parts[1] ?? null);
+}, $teams);
+$teams = (new TeamCollection(...$teams))->randomize();
+
+// Can't group/split teams of 1-5
+if ($teams->count() < 6) {
+    $numberOfFields = 1;
 }
 
-foreach ($groups as $groupIndex => $group) {
-    $matches = [];
-    foreach ($group['teams'] as $teamHome) {
-        foreach ($group['teams'] as $teamAway) {
-            if ($teamHome === $teamAway) {
-                continue;
-            }
+$groups = $groupsBuilder->withColors(...$colors)->withTeams($teams)->make();
 
-            $teamNames = [$teamHome, $teamAway];
-            sort($teamNames);
-            $matchName = implode('-', $teamNames);
+$gamesBuilder = new GamesBuilder();
+$allGames = [];
 
-            if (isset($matches[$matchName])) {
-                continue;
-            }
+/** @var \Bunds\Tournament\Entities\Group */
+foreach ($groups as $group) {
+    $games = $gamesBuilder->withGroup($group, $group->index)->make();
+    $group->setGames($games);
+    $allGames[] = $games;
+}
 
-            $matches[$matchName] = [
-                $teamHome,
-                $teamAway,
-            ];
-        }
+$allGames = GameCollection::fromCollections(...$allGames);
+
+// No possible solution when number of matches exceeds total number of time slots..
+$totalFieldsCapacity = $fieldCapacity * $numberOfFields;
+if ($allGames->count() > $totalFieldsCapacity) {
+    http_response_code(400);
+    echo json_encode([
+        'message' => "Ud fra {$teams->count()} antal hold"
+            . " og {$groups->count()} antal generede puljer,"
+            . " blev der lavet {$allGames->count()} totale antal spil-matches."
+            . " Grundet antal mulige spil på alle baner ({$totalFieldsCapacity}) kan der ikke findes en løsning."
+            . " Overvej evt at:\n\t- Fjerne hold\n\t- Tilføj flere baner\n\t- Udvid start/slut interval"
+    ]);
+    exit(0);
+}
+
+try {
+    $groupDistributor = new GroupDistributor($numberOfFields, $groups);
+    $fieldsBuilder = new FieldsBuilder($numberOfFields);
+    $fields = $fieldsBuilder->withGroups($groups)->withGroupDistributions(
+        $groupDistributor->getBestDistribution($fieldCapacity)
+    )->make();
+
+    $gameScheduler = new GameScheduler($fields);
+    $orderedFields = $gameScheduler->getBestDistribution();
+} catch (\Throwable $th) {
+    http_response_code(400);
+    echo json_encode([
+        'message' => 'Kunne ikke generere puljer eller skema for banerne.. Prøv igen. Evt prøv at ændre på nogle af parametrene.'
+    ]);
+    exit(0);
+}
+
+/** @var \Bunds\Tournament\Entities\Field */
+foreach ($orderedFields as $field) {
+    /** @var \Bunds\Tournament\Entities\Game */
+    foreach ($field->getGames() as $index => $game) {
+        $game->setStart(clone $gameTimes[$index]);
     }
-
-    shuffle($matches);
-    $groups[$groupIndex]['matches'] = $matches;
 }
 
-echo json_encode($groups);
-
-// Sønderris SK 1
-// Bramming B2
-// Jerne if 2
-// Hjerting IF 2
-// Varde IF
-// EFB A
-// Nr. Bjært/Strandhuse IF
-// Årslev boldklub
-// NRUI
-// SGI
-// EFB B
-// hfb u 9
-// Bjert IF B
-// AiF
-// Hjerting IF 1
-// Dalby GF
-// Sønderris SK 2
-// Øster Lindet U9 B
-// Jerne if 1
-// Bramming B1
-// Sønderris U9 Piger
-// Spangsbjerg IF 2
+echo json_encode([
+    'groups' => (array) $groups,
+    'fields' => (array) $orderedFields
+]);

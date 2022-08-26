@@ -31,7 +31,7 @@ const app = createApp({
       formData.append("startTime", startTime.value);
       formData.append("endTime", endTime.value);
 
-      fetch("/api_ortools.php", {
+      fetch("/api.php", {
         method: "POST",
         body: formData,
       })
